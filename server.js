@@ -13,9 +13,12 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 const server = http.createServer(app);
 
+// normalize the client URL (strip trailing slash so CORS checks match)
+const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/g, '');
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: clientUrl,
     methods: ['GET', 'POST', 'PATCH'],
   },
 });
@@ -24,7 +27,7 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
+app.use(cors({ origin: clientUrl }));
 app.use(express.json());
 
 // Rate limiting
