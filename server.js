@@ -13,8 +13,9 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 const server = http.createServer(app);
 
-// normalize the client URL (strip trailing slash so CORS checks match)
-const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/g, '');
+// normalize client URL
+const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .replace(/\/+$/g, '');
 
 const io = new Server(server, {
   cors: {
@@ -23,7 +24,6 @@ const io = new Server(server, {
   },
 });
 
-// Make io accessible in routes
 app.set('io', io);
 
 // Middleware
@@ -38,9 +38,85 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Routes
+// ================= ROUTES =================
+
 app.use('/api/experts', expertRoutes);
 app.use('/api/bookings', bookingRoutes);
+
+// TEMPORARY SEED ROUTE (REMOVE AFTER USE)
+app.get('/api/seed', async (req, res) => {
+  try {
+    const Expert = require('./models/Expert');
+    await Expert.deleteMany({});
+
+    const generateSlots = () => {
+      const slots = [];
+      const today = new Date();
+
+      for (let d = 1; d <= 14; d++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + d);
+        const dateStr = date.toISOString().split('T')[0];
+
+        ['09:00','10:00','11:00','14:00','15:00','16:00','17:00']
+          .forEach(time => {
+            slots.push({
+              date: dateStr,
+              time,
+              isBooked: false
+            });
+          });
+      }
+      return slots;
+    };
+
+    const experts = [
+      {
+        name: 'Dr. Sarah Chen',
+        category: 'Technology',
+        experience: 12,
+        rating: 4.9,
+        totalReviews: 187,
+        bio: 'AI/ML expert with 12 years building scalable systems.',
+        hourlyRate: 5000,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
+        availableSlots: generateSlots(),
+      },
+      {
+        name: 'Marcus Williams',
+        category: 'Business',
+        experience: 15,
+        rating: 4.8,
+        totalReviews: 234,
+        bio: 'Serial entrepreneur and business consultant.',
+        hourlyRate: 6000,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=marcus',
+        availableSlots: generateSlots(),
+      },
+      {
+        name: 'Priya Sharma',
+        category: 'Marketing',
+        experience: 10,
+        rating: 4.6,
+        totalReviews: 198,
+        bio: 'Growth marketing expert.',
+        hourlyRate: 4500,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=priya',
+        availableSlots: generateSlots(),
+      }
+    ];
+
+    await Expert.insertMany(experts);
+
+    res.json({
+      success: true,
+      message: `Seeded ${experts.length} experts successfully!`
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
@@ -54,7 +130,6 @@ io.on('connection', (socket) => {
 
   socket.on('join-expert', (expertId) => {
     socket.join(`expert-${expertId}`);
-    console.log(`Socket ${socket.id} joined expert-${expertId}`);
   });
 
   socket.on('leave-expert', (expertId) => {
@@ -66,10 +141,10 @@ io.on('connection', (socket) => {
   });
 });
 
-// Connect to MongoDB
+// MongoDB connect
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/expert-booking';
-mongoose
-  .connect(MONGODB_URI)
+
+mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
     const PORT = process.env.PORT || 5000;
